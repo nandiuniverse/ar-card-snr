@@ -36,7 +36,7 @@
   
   <body>
     <!-- Configuración principal de la escena. Reemplaza "./targets.mind" por tu archivo compilado -->
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;" 
+    <a-scene mindar-image="imageTargetSrc: ./tarjeta_snr.mind; autoStart: true;" 
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
@@ -44,10 +44,10 @@
       
       <!-- Carga de assets (modelos y videos) -->
       <a-assets>
-        <a-asset-item id="modelo-3d" src="./tu-archivo.glb"></a-asset-item>
+        <a-asset-item id="modelo-3d" src="./snr_business_card.glb"></a-asset-item>
         
         <!-- Importante: muted, playsinline y webkit-playsinline son obligatorios en iOS/Android -->
-        <video id="mi-video" src="./tu-video.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
+        <video id="mi-video" src="./reel_snrlab.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
