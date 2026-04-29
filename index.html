@@ -4,44 +4,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AR Business Card - SNR LAB</title>
     
-    <!-- Librerías -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
-    <!-- COMPONENTE NUEVO: Secuencia de animaciones -->
     <script>
-      AFRAME.registerComponent('secuencia-animaciones', {
+      AFRAME.registerComponent('secuencia-snr', {
         init: function () {
           const el = this.el;
 
-          // 1. Ayudante: Imprime en consola los nombres de tus animaciones
-          el.addEventListener('model-loaded', () => {
-            const mesh = el.getObject3D('mesh');
-            if (mesh && mesh.animations) {
-              console.log("👉 NOMBRES DE TUS ANIMACIONES EN EL GLB:", mesh.animations.map(a => a.name));
-            }
+          // 1. Al cargar, disparamos todas las animaciones de ENTRADA
+          // El asterisco '*' al final busca todo lo que empiece con ese nombre o contenga la palabra
+          el.setAttribute('animation-mixer', {
+            clip: '*_inicio', // Esto captura "Moneda_Inicio", "SNR_inicio", etc.
+            loop: 'once',
+            crossFadeDuration: 0.2
           });
 
-          // 2. Arrancar con la animación de ENTRADA (Una sola vez)
-          // REEMPLAZÁ 'NombreTuAnimacionEntrada' POR EL NOMBRE REAL
-          el.setAttribute('animation-mixer', 'clip: NombreTuAnimacionEntrada; loop: once; crossFadeDuration: 0.2');
-
-          // 3. Cuando termina la entrada, pasamos a la FLOTACIÓN (En loop)
+          // 2. Escuchamos cuando termina UNA de las animaciones (todas duran lo mismo)
           el.addEventListener('animation-finished', () => {
-            // REEMPLAZÁ 'NombreTuAnimacionFlotacion' POR EL NOMBRE REAL
-            el.setAttribute('animation-mixer', 'clip: NombreTuAnimacionFlotacion; loop: repeat; crossFadeDuration: 0.4');
+            // 3. Pasamos a todas las de FLOTACIÓN en loop infinito
+            el.setAttribute('animation-mixer', {
+              clip: '*_flotacion', // Esto captura "Moneda_Flotacion", "Luz_flotacion", etc.
+              loop: 'repeat',
+              crossFadeDuration: 0.4
+            });
           });
         }
       });
     </script>
 
-    <!-- Script del Video -->
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         const target = document.querySelector('#tarjeta-target');
         const vid = document.querySelector('#mi-video');
-
         target.addEventListener("targetFound", event => vid.play());
         target.addEventListener("targetLost", event => vid.pause());
       });
@@ -64,11 +60,10 @@
         
         <a-video src="#mi-video" position="0 0.5 0" rotation="90 0 0" width="1" height="0.5625"></a-video>
 
-        <!-- EL MODELO 3D: Le quitamos el animation-mixer y le agregamos nuestro componente 'secuencia-animaciones' -->
         <a-entity gltf-model="#modelo-3d" 
                   position="0 0 0" 
                   scale="0.5 0.5 0.5" 
-                  secuencia-animaciones>
+                  secuencia-snr>
         </a-entity>
 
       </a-entity>
