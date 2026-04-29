@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AR Business Card</title>
+    <title>AR Business Card - SNR LAB</title>
     
     <!-- 1. A-Frame (El motor 3D) -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -35,31 +35,25 @@
   </head>
   
   <body>
-    <!-- Configuración principal de la escena. Reemplaza "./targets.mind" por tu archivo compilado -->
-    <a-scene mindar-image="imageTargetSrc: ./tarjeta_snr.mind; autoStart: true;" 
+    <!-- Configuración principal de la escena. Ruta de ASSETS corregida -->
+    <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true;" 
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
              device-orientation-permission-ui="enabled: false">
       
-      <!-- Carga de assets (modelos y videos) -->
+      <!-- Carga de assets con la ruta a la carpeta ASSETS -->
       <a-assets>
-        <a-asset-item id="modelo-3d" src="./snr_business_card.glb"></a-asset-item>
+        <a-asset-item id="modelo-3d" src="./assets/snr_business_card.glb"></a-asset-item>
         
-        <!-- Importante: muted, playsinline y webkit-playsinline son obligatorios en iOS/Android -->
-        <video id="mi-video" src="./reel_snrlab.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
+        <video id="mi-video" src="./assets/reel_snrlab.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Aquí empieza la magia. El targetIndex 0 es la imagen principal de tu tarjeta -->
       <a-entity id="tarjeta-target" mindar-image-target="targetIndex: 0">
         
-        <!-- ========================================== -->
-        <!-- EL VIDEO (Efecto pantalla de cine)         -->
-        <!-- ========================================== -->
-        <!-- rotation="90 0 0" lo levanta perpendicular. -->
-        <!-- position="0 0.5 0" lo eleva un poquito en Y para que no atraviese la tarjeta física -->
+        <!-- EL VIDEO -->
         <a-video src="#mi-video" 
                  position="0 0.5 0" 
                  rotation="90 0 0" 
@@ -67,10 +61,7 @@
                  height="0.5625">
         </a-video>
 
-        <!-- ========================================== -->
-        <!-- EL MODELO 3D (Con animaciones activadas)   -->
-        <!-- ========================================== -->
-        <!-- animation-mixer="clip: *" reproduce todas las pistas a la vez. -->
+        <!-- EL MODELO 3D -->
         <a-entity gltf-model="#modelo-3d" 
                   position="0 0 0" 
                   scale="0.5 0.5 0.5" 
