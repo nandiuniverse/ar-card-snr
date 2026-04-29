@@ -2,83 +2,80 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta charset="utf-8" />
-    <title>SNR LAB - AR Business Card</title>
+    <title>AR Business Card</title>
     
-    <!-- 1. Librerías Core de Realidad Aumentada -->
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <!-- Librería Extra para leer las animaciones de Blender (NLA Tracks) -->
+    <!-- 1. A-Frame (El motor 3D) -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    
+    <!-- 2. MindAR para A-Frame (El motor de Realidad Aumentada) -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    
+    <!-- 3. A-Frame Extras (Para que funcione el animation-mixer del 3D) -->
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
-    <!-- 2. El "Director de Orquesta" (Lógica de animación y video) -->
+    <!-- Script para forzar el Play/Pause del video -->
     <script>
       document.addEventListener("DOMContentLoaded", function() {
-        const tarjeta = document.querySelector('#mi-tarjeta');
-        const videoReel = document.querySelector('#reelVideo');
-        const modelo = document.querySelector('#modelo-snr');
-        let timeoutVideo;
-        
-        // --- LÓGICA DEL MODELO 3D (BLENDER) ---
-        modelo.addEventListener('model-loaded', () => {
-          // Apenas carga, reproduce la pista 'Inicio' una sola vez y se queda en el último frame
-          modelo.setAttribute('animation-mixer', 'clip: Inicio; loop: once; clampWhenFinished: true');
+        const target = document.querySelector('#tarjeta-target');
+        const vid = document.querySelector('#mi-video');
+
+        // Cuando la cámara detecta la tarjeta:
+        target.addEventListener("targetFound", event => {
+          console.log("Tarjeta detectada - Dando play al video");
+          vid.play();
         });
 
-        modelo.addEventListener('animation-finished', (e) => {
-          // Cuando termina 'Inicio', hace transición suave a 'Flotacion' en loop infinito
-          if (e.detail.action._clip.name === 'Inicio') {
-            modelo.setAttribute('animation-mixer', 'clip: Flotacion; loop: repeat; crossFadeDuration: 0.5');
-          }
-        });
-
-        // --- LÓGICA DEL VIDEO HOLOGRÁFICO ---
-        // Cuando el usuario enfoca la tarjeta con la cámara:
-        tarjeta.addEventListener("targetFound", () => {
-          // Espera 3 segundos exactos (3000 ms) y le da Play al video
-          timeoutVideo = setTimeout(() => {
-            videoReel.play(); 
-          }, 3000); 
-        });
-
-        // Cuando el usuario aleja la cámara o tapa la tarjeta:
-        tarjeta.addEventListener("targetLost", () => {
-          clearTimeout(timeoutVideo); // Cancela la cuenta regresiva si quitó la cámara rápido
-          videoReel.pause(); // Pausa el video
+        // Cuando la cámara pierde la tarjeta:
+        target.addEventListener("targetLost", event => {
+          console.log("Tarjeta perdida - Pausando video");
+          vid.pause();
         });
       });
     </script>
   </head>
-
+  
   <body>
-    <!-- 3. Configuración de la escena y vinculación de tu archivo .mind -->
-    <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind;" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+    <!-- Configuración principal de la escena. Reemplaza "./targets.mind" por tu archivo compilado -->
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;" 
+             color-space="sRGB" 
+             renderer="colorManagement: true, physicallyCorrectLights" 
+             vr-mode-ui="enabled: false" 
+             device-orientation-permission-ui="enabled: false">
       
-      <!-- 4. Precarga de Assets (Asegúrate de que los nombres de los archivos coincidan) -->
+      <!-- Carga de assets (modelos y videos) -->
       <a-assets>
-        <a-asset-item id="tarjeta-glb" src="./assets/snr_business_card.glb"></a-asset-item>
-        <!-- Las etiquetas webkit-playsinline y playsinline son VITALES para que funcione en iPhone -->
-        <video id="reelVideo" src="./assets/reel_snrlab.mp4" webkit-playsinline playsinline loop="true" crossOrigin="anonymous" muted></video>
+        <a-asset-item id="modelo-3d" src="./tu-archivo.glb"></a-asset-item>
+        
+        <!-- Importante: muted, playsinline y webkit-playsinline son obligatorios en iOS/Android -->
+        <video id="mi-video" src="./tu-video.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- 5. El centro mágico: lo que aparece al escanear la tarjeta -->
-      <a-entity mindar-image-target="targetIndex: 0" id="mi-tarjeta">
+      <!-- Aquí empieza la magia. El targetIndex 0 es la imagen principal de tu tarjeta -->
+      <a-entity id="tarjeta-target" mindar-image-target="targetIndex: 0">
         
-        <!-- Tu archivo de Blender exportado -->
-        <a-gltf-model id="modelo-snr" src="#tarjeta-glb" position="0 0 0" scale="1 1 1"></a-gltf-model>
-        
-        <!-- El holograma del Reel -->
-        <!-- NOTA: Modifica el valor de 'position' con los números que sacaste del A-Frame Inspector -->
-        <a-video 
-          id="pantalla-holograma"
-          src="#reelVideo" 
-          position="0 1.5 0" 
-          scale="0 0 0" 
-          material="shader: standard; blending: additive; opacity: 0.85; side: double"
-          animation="property: scale; to: 1.6 0.9 1; dur: 1000; delay: 3000; easing: easeOutElastic">
+        <!-- ========================================== -->
+        <!-- EL VIDEO (Efecto pantalla de cine)         -->
+        <!-- ========================================== -->
+        <!-- rotation="90 0 0" lo levanta perpendicular. -->
+        <!-- position="0 0.5 0" lo eleva un poquito en Y para que no atraviese la tarjeta física -->
+        <a-video src="#mi-video" 
+                 position="0 0.5 0" 
+                 rotation="90 0 0" 
+                 width="1" 
+                 height="0.5625">
         </a-video>
+
+        <!-- ========================================== -->
+        <!-- EL MODELO 3D (Con animaciones activadas)   -->
+        <!-- ========================================== -->
+        <!-- animation-mixer="clip: *" reproduce todas las pistas a la vez. -->
+        <a-entity gltf-model="#modelo-3d" 
+                  position="0 0 0" 
+                  scale="0.5 0.5 0.5" 
+                  animation-mixer="clip: *; loop: repeat">
+        </a-entity>
 
       </a-entity>
     </a-scene>
