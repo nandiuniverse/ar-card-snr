@@ -1,32 +1,100 @@
-<script>
-  AFRAME.registerComponent('secuencia-snr', {
-    init: function () {
-      const el = this.el;
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AR Business Card - SNR LAB</title>
+    
+    <!-- Librerías base -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
-      el.addEventListener('model-loaded', () => {
-        // Forzamos un pequeño retraso de 100ms para que el motor 3D respire
-        setTimeout(() => {
-          // 1. Ejecutamos TODO lo que diga inicio una sola vez
-          el.setAttribute('animation-mixer', {
-            clip: "*nicio*", 
-            loop: 'once',
-            clampWhenFinished: true, // Se queda quieto al terminar en lugar de desaparecer
-            crossFadeDuration: 0
+    <!-- Componente de secuencia de animación mejorado -->
+    <script>
+      AFRAME.registerComponent('secuencia-snr', {
+        init: function () {
+          const el = this.el;
+
+          el.addEventListener('model-loaded', () => {
+            console.log("Modelo cargado. Preparando secuencia...");
+            // Pequeño retraso para asegurar que el mixer esté listo
+            setTimeout(() => {
+              el.setAttribute('animation-mixer', {
+                clip: "*nicio*", 
+                loop: 'once',
+                clampWhenFinished: true,
+                crossFadeDuration: 0
+              });
+            }, 150);
           });
-        }, 100);
-      });
 
-      // 2. Escuchamos el final para pasar a la flotación
-      el.addEventListener('animation-finished', (e) => {
-        // Solo cambiamos si lo que terminó fue una animación de inicio
-        if (e.detail.action._clip.name.toLowerCase().includes('inicio')) {
-          el.setAttribute('animation-mixer', {
-            clip: "*lotacion*",
-            loop: 'repeat',
-            crossFadeDuration: 0.5 // Transición suave entre estados
+          el.addEventListener('animation-finished', (e) => {
+            // Verificamos si la animación que terminó es de inicio
+            const clipName = e.detail.action._clip.name.toLowerCase();
+            if (clipName.includes('inicio')) {
+              console.log("Inicio terminado. Pasando a flotación...");
+              el.setAttribute('animation-mixer', {
+                clip: "*lotacion*",
+                loop: 'repeat',
+                crossFadeDuration: 0.5
+              });
+            }
           });
         }
       });
-    }
-  });
-</script>
+    </script>
+
+    <!-- Control del video -->
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        const target = document.querySelector('#tarjeta-target');
+        const vid = document.querySelector('#mi-video');
+        target.addEventListener("targetFound", event => {
+          console.log("Tarjeta detectada");
+          vid.play();
+        });
+        target.addEventListener("targetLost", event => {
+          console.log("Tarjeta perdida");
+          vid.pause();
+        });
+      });
+    </script>
+  </head>
+  
+  <body>
+    <!-- Escena con filtros de suavizado para reducir el temblor (Jitter) -->
+    <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF: 0.001; filterBeta: 0.01;" 
+             color-space="sRGB" 
+             renderer="colorManagement: true, physicallyCorrectLights" 
+             vr-mode-ui="enabled: false" 
+             device-orientation-permission-ui="enabled: false">
+      
+      <a-assets>
+        <a-asset-item id="modelo-3d" src="./assets/snr_business_card.glb"></a-asset-item>
+        <video id="mi-video" src="./assets/reel_snrlab.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
+      </a-assets>
+
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <a-entity id="tarjeta-target" mindar-image-target="targetIndex: 0">
+        
+        <!-- Plano de video -->
+        <a-video src="#mi-video" 
+                 position="0 0.5 0" 
+                 rotation="90 0 0" 
+                 width="1" 
+                 height="0.5625">
+        </a-video>
+
+        <!-- Modelo 3D con rotación y secuencia aplicada -->
+        <a-entity gltf-model="#modelo-3d" 
+                  position="0 0 0" 
+                  rotation="90 0 0"
+                  scale="0.5 0.5 0.5" 
+                  secuencia-snr>
+        </a-entity>
+
+      </a-entity>
+    </a-scene>
+  </body>
+</html>
