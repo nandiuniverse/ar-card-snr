@@ -13,22 +13,24 @@
         init: function () {
           const el = this.el;
 
-          // 1. Al cargar, disparamos todas las animaciones de ENTRADA
-          // El asterisco '*' al final busca todo lo que empiece con ese nombre o contenga la palabra
-          el.setAttribute('animation-mixer', {
-            clip: '*_inicio', // Esto captura "Moneda_Inicio", "SNR_inicio", etc.
-            loop: 'once',
-            crossFadeDuration: 0.2
-          });
-
-          // 2. Escuchamos cuando termina UNA de las animaciones (todas duran lo mismo)
-          el.addEventListener('animation-finished', () => {
-            // 3. Pasamos a todas las de FLOTACIÓN en loop infinito
+          // Función para disparar animaciones ignorando mayúsculas/minúsculas
+          const playClips = (filter) => {
             el.setAttribute('animation-mixer', {
-              clip: '*_flotacion', // Esto captura "Moneda_Flotacion", "Luz_flotacion", etc.
-              loop: 'repeat',
+              clip: filter,
+              loop: (filter.includes('flotacion') || filter.includes('Flotacion')) ? 'repeat' : 'once',
               crossFadeDuration: 0.4
             });
+          };
+
+          // 1. Iniciamos con todo lo que sea "inicio" o "Inicio"
+          // Usamos un selector más amplio para no fallar
+          el.addEventListener('model-loaded', () => {
+            playClips('*nicio*'); 
+          });
+
+          // 2. Al terminar, pasamos al loop de flotación
+          el.addEventListener('animation-finished', () => {
+            playClips('*lotacion*');
           });
         }
       });
@@ -45,7 +47,8 @@
   </head>
   
   <body>
-    <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true;" 
+    <!-- Agregamos filterMinCF y filterBeta para reducir el temblor -->
+    <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF:0.001; filterBeta: 0.01;" 
              color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
       
@@ -61,7 +64,7 @@
         <a-video src="#mi-video" position="0 0.5 0" rotation="90 0 0" width="1" height="0.5625"></a-video>
 
         <a-entity gltf-model="#modelo-3d" 
-                  position="0 0 0"
+                  position="0 0 0" 
                   rotation="90 0 0"
                   scale="0.5 0.5 0.5" 
                   secuencia-snr>
