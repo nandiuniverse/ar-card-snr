@@ -4,48 +4,57 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AR Business Card - SNR LAB</title>
     
-    <!-- 1. A-Frame (El motor 3D) -->
+    <!-- Librerías -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    
-    <!-- 2. MindAR para A-Frame (El motor de Realidad Aumentada) -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-    
-    <!-- 3. A-Frame Extras (Para que funcione el animation-mixer del 3D) -->
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
-    <!-- Script para forzar el Play/Pause del video -->
+    <!-- COMPONENTE NUEVO: Secuencia de animaciones -->
+    <script>
+      AFRAME.registerComponent('secuencia-animaciones', {
+        init: function () {
+          const el = this.el;
+
+          // 1. Ayudante: Imprime en consola los nombres de tus animaciones
+          el.addEventListener('model-loaded', () => {
+            const mesh = el.getObject3D('mesh');
+            if (mesh && mesh.animations) {
+              console.log("👉 NOMBRES DE TUS ANIMACIONES EN EL GLB:", mesh.animations.map(a => a.name));
+            }
+          });
+
+          // 2. Arrancar con la animación de ENTRADA (Una sola vez)
+          // REEMPLAZÁ 'NombreTuAnimacionEntrada' POR EL NOMBRE REAL
+          el.setAttribute('animation-mixer', 'clip: NombreTuAnimacionEntrada; loop: once; crossFadeDuration: 0.2');
+
+          // 3. Cuando termina la entrada, pasamos a la FLOTACIÓN (En loop)
+          el.addEventListener('animation-finished', () => {
+            // REEMPLAZÁ 'NombreTuAnimacionFlotacion' POR EL NOMBRE REAL
+            el.setAttribute('animation-mixer', 'clip: NombreTuAnimacionFlotacion; loop: repeat; crossFadeDuration: 0.4');
+          });
+        }
+      });
+    </script>
+
+    <!-- Script del Video -->
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         const target = document.querySelector('#tarjeta-target');
         const vid = document.querySelector('#mi-video');
 
-        // Cuando la cámara detecta la tarjeta:
-        target.addEventListener("targetFound", event => {
-          console.log("Tarjeta detectada - Dando play al video");
-          vid.play();
-        });
-
-        // Cuando la cámara pierde la tarjeta:
-        target.addEventListener("targetLost", event => {
-          console.log("Tarjeta perdida - Pausando video");
-          vid.pause();
-        });
+        target.addEventListener("targetFound", event => vid.play());
+        target.addEventListener("targetLost", event => vid.pause());
       });
     </script>
   </head>
   
   <body>
-    <!-- Configuración principal de la escena. Ruta de ASSETS corregida -->
     <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true;" 
-             color-space="sRGB" 
-             renderer="colorManagement: true, physicallyCorrectLights" 
-             vr-mode-ui="enabled: false" 
-             device-orientation-permission-ui="enabled: false">
+             color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" 
+             vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
       
-      <!-- Carga de assets con la ruta a la carpeta ASSETS -->
       <a-assets>
         <a-asset-item id="modelo-3d" src="./assets/snr_business_card.glb"></a-asset-item>
-        
         <video id="mi-video" src="./assets/reel_snrlab.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
       </a-assets>
 
@@ -53,19 +62,13 @@
 
       <a-entity id="tarjeta-target" mindar-image-target="targetIndex: 0">
         
-        <!-- EL VIDEO -->
-        <a-video src="#mi-video" 
-                 position="0 0.5 0" 
-                 rotation="90 0 0" 
-                 width="1" 
-                 height="0.5625">
-        </a-video>
+        <a-video src="#mi-video" position="0 0.5 0" rotation="90 0 0" width="1" height="0.5625"></a-video>
 
-        <!-- EL MODELO 3D -->
+        <!-- EL MODELO 3D: Le quitamos el animation-mixer y le agregamos nuestro componente 'secuencia-animaciones' -->
         <a-entity gltf-model="#modelo-3d" 
                   position="0 0 0" 
                   scale="0.5 0.5 0.5" 
-                  animation-mixer="clip: *; loop: repeat">
+                  secuencia-animaciones>
         </a-entity>
 
       </a-entity>
