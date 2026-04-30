@@ -1,74 +1,114 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>AR Business Card - SNR LAB</title>
     
-    <!-- Librerías base -->
+    <!-- 1. Librerías Base -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+    
+    <!-- 2. Librería para Gestos (Mover, Rotar, Escalar con los dedos) -->
+    <script src="https://cdn.jsdelivr.net/gh/fcor/aframe-gesture-handler@master/dist/aframe-gesture-handler.min.js"></script>
 
-    <!-- Componente de secuencia de animación mejorado -->
     <script>
-      AFRAME.registerComponent('secuencia-snr', {
+      // 3. COMPONENTE MAESTRO: Controla animaciones, video, escáner y clics[cite: 3]
+      AFRAME.registerComponent('logica-interactiva', {
         init: function () {
           const el = this.el;
+          const target = document.querySelector('#tarjeta-target');
+          const vidAsset = document.querySelector('#mi-video');
+          const vidEntidad = document.querySelector('#entidad-video');
+          const luzEscaner = document.querySelector('#luz-escaner');
 
+          // --- A. Lógica del Modelo 3D ---
           el.addEventListener('model-loaded', () => {
-            console.log("Modelo cargado. Preparando secuencia...");
-            // Pequeño retraso para asegurar que el mixer esté listo
             setTimeout(() => {
               el.setAttribute('animation-mixer', {
                 clip: "*nicio*", 
                 loop: 'once',
-                clampWhenFinished: true,
-                crossFadeDuration: 0
+                timeScale: 0.6, // Entrada ralentizada para apreciarse mejor
+                clampWhenFinished: true
               });
-            }, 150);
+            }, 800);
           });
 
           el.addEventListener('animation-finished', (e) => {
-            // Verificamos si la animación que terminó es de inicio
-            const clipName = e.detail.action._clip.name.toLowerCase();
-            if (clipName.includes('inicio')) {
-              console.log("Inicio terminado. Pasando a flotación...");
+            if (e.detail.action._clip.name.toLowerCase().includes('inicio')) {
               el.setAttribute('animation-mixer', {
                 clip: "*lotacion*",
                 loop: 'repeat',
-                crossFadeDuration: 0.5
+                timeScale: 1.0,
+                crossFadeDuration: 0.8 // Transición suave al loop
               });
             }
           });
-        }
-      });
-    </script>
 
-    <!-- Control del video -->
-    <script>
-      document.addEventListener("DOMContentLoaded", function() {
-        const target = document.querySelector('#tarjeta-target');
-        const vid = document.querySelector('#mi-video');
-        target.addEventListener("targetFound", event => {
-          console.log("Tarjeta detectada");
-          vid.play();
-        });
-        target.addEventListener("targetLost", event => {
-          console.log("Tarjeta perdida");
-          vid.pause();
-        });
+          // --- B. Lógica al Detectar/Perder la Tarjeta ---
+          target.addEventListener("targetFound", () => {
+            vidAsset.play();
+            
+            // Animación: Apertura del video holográfico
+            vidEntidad.setAttribute('animation', {
+              property: 'scale',
+              from: '1 0 1',
+              to: '1 1 1',
+              dur: 1000,
+              easing: 'easeOutElastic'
+            });
+
+            // Animación: Barrido del láser hacia abajo
+            luzEscaner.setAttribute('animation__movimiento', {
+              property: 'position',
+              from: '0 0.8 0.01',
+              to: '0 -0.8 0.01',
+              dur: 1500,
+              easing: 'easeInOutSine'
+            });
+
+            // Animación: Destello del láser (prende y apaga)
+            luzEscaner.setAttribute('animation__brillo', {
+              property: 'material.opacity',
+              from: 0,
+              to: 0.8,
+              dur: 750,
+              dir: 'alternate',
+              loop: 2
+            });
+          });
+
+          target.addEventListener("targetLost", () => {
+            vidAsset.pause();
+            
+            // Reseteamos las posiciones y escalas al perder la cámara
+            vidEntidad.setAttribute('scale', '1 0 1');
+            luzEscaner.setAttribute('position', '0 0.8 0.01'); 
+            luzEscaner.setAttribute('material', 'opacity', 0);
+          });
+
+          // --- C. Link Interactivo ---
+          el.addEventListener('click', () => {
+            console.log("Abriendo web...");
+            window.open('https://snrlab.xyz', '_blank'); // Reemplazar por URL final
+          });
+        }
       });
     </script>
   </head>
   
   <body>
-    <!-- Escena con filtros de suavizado para reducir el temblor (Jitter) -->
-    <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF: 0.001; filterBeta: 0.01;" 
+    <!-- Configuración de Escena: Filtros anti-temblor y detectores de gestos/clics -->
+    <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF: 0.0005; filterBeta: 0.1;" 
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
-             device-orientation-permission-ui="enabled: false">
+             device-orientation-permission-ui="enabled: false"
+             gesture-detector
+             cursor="fuse: false; rayOrigin: mouse"
+             raycaster="objects: .clickable">
       
+      <!-- Carga de Archivos -->
       <a-assets>
         <a-asset-item id="modelo-3d" src="./assets/snr_business_card.glb"></a-asset-item>
         <video id="mi-video" src="./assets/reel_snrlab.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
@@ -76,22 +116,38 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
+      <!-- Contenedor Principal (Enganchado a la imagen compilada) -->
       <a-entity id="tarjeta-target" mindar-image-target="targetIndex: 0">
         
-        <!-- Plano de video -->
-        <a-video src="#mi-video" 
-                 position="0 0 0.6" 
+        <!-- 1. EL LÁSER ESCÁNER -->
+        <a-plane id="luz-escaner" 
+                 width="1.1" 
+                 height="0.08" 
+                 position="0 0.8 0.01" 
+                 color="#00FF44" 
+                 material="shader: flat; transparent: true; opacity: 0; blending: additive">
+        </a-plane>
+
+        <!-- 2. EL VIDEO HOLOGRÁFICO -->
+        <a-video id="entidad-video"
+                 src="#mi-video" 
+                 position="0 0.6 0" 
                  rotation="90 0 0" 
                  width="1" 
-                 height="0.5625">
+                 height="0.5625"
+                 scale="1 0 1"
+                 material="transparent: true; opacity: 0.85; side: double">
         </a-video>
 
-        <!-- Modelo 3D con rotación y secuencia aplicada -->
+        <!-- 3. EL MODELO 3D INTERACTIVO -->
         <a-entity gltf-model="#modelo-3d" 
+                  id="logo-snr"
+                  class="clickable"
                   position="0 0 0" 
                   rotation="90 0 0"
-                  scale="1 1 1" 
-                  secuencia-snr>
+                  scale="0.5 0.5 0.5" 
+                  gesture-handler
+                  logica-interactiva>
         </a-entity>
 
       </a-entity>
