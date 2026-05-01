@@ -4,17 +4,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>AR Business Card - SNR LAB</title>
     
-    <!-- Librerías Base -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/fcor/aframe-gesture-handler@master/dist/aframe-gesture-handler.min.js"></script>
 
-    <!-- ========================================== -->
-    <!-- ¡ACÁ EMPIEZA EL JAVASCRIPT!                -->
-    <!-- ========================================== -->
     <script>
-      // 1. COMPONENTE OCULTADOR: Crea la barrera invisible con la forma troquelada
+      // 1. EL SHADER CUSTOM: Corta la silueta y genera el láser de barrido
+      AFRAME.registerShader('escaner-silueta', {
+        schema: {
+          mascara: {type: 'map', is: 'uniform'},
+          colorLinea: {type: 'color', is: 'uniform', default: '#00FF44'},
+          posicionY: {type: 'number', is: 'uniform', default: 1.0}
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D mascara;
+          uniform vec3 colorLinea;
+          uniform float posicionY;
+          varying vec2 vUv;
+
+          void main() {
+            // Lee la máscara JPG (Blanco y Negro)
+            vec4 colorMascara = texture2D(mascara, vUv);
+            
+            // Si el pixel es negro, lo hace totalmente transparente (recorte)
+            if (colorMascara.r < 0.5) discard;
+            
+            // Genera la línea láser brillante
+            float grosor = 0.04;
+            float distancia = abs(vUv.y - posicionY);
+            float intensidad = smoothstep(grosor, 0.0, distancia);
+            
+            // Dibuja el color con la opacidad de la línea
+            gl_FragColor = vec4(colorLinea, intensidad);
+          }
+        `
+      });
+
+      // 2. COMPONENTE OCULTADOR
       AFRAME.registerComponent('ocultador', {
         init: function () {
           let mesh = this.el.getObject3D('mesh');
@@ -25,58 +59,46 @@
         }
       });
 
-      // 2. COMPONENTE MAESTRO: Lógica de animaciones y video
+      // 3. COMPONENTE MAESTRO
       AFRAME.registerComponent('logica-interactiva', {
         init: function () {
           const el = this.el;
           const target = document.querySelector('#tarjeta-target');
           const vidAsset = document.querySelector('#mi-video');
           const vidEntidad = document.querySelector('#entidad-video');
-          const resplandor = document.querySelector('#resplandor-tarjeta'); // <- Capturamos el resplandor
+          const barrido = document.querySelector('#barrido-tarjeta'); 
 
-          // Animación 3D en loop desde el inicio
           el.addEventListener('model-loaded', () => {
-            el.setAttribute('animation-mixer', {
-              clip: "*", 
-              loop: 'repeat',
-              timeScale: 1.0
-            });
+            el.setAttribute('animation-mixer', { clip: "*", loop: 'repeat', timeScale: 1.0 });
           });
 
-          // Cuando la cámara detecta la tarjeta
           target.addEventListener("targetFound", () => {
             vidAsset.play();
             
-            // Apertura del video (escala)
+            // Apertura del video
             vidEntidad.setAttribute('animation', 'property: scale; from: 1 0 1; to: 1 1 1; dur: 1000; easing: easeOutElastic');
 
-            // El resplandor palpita (se prende y apaga 4 veces)
-            resplandor.setAttribute('animation__pulso', 'property: material.opacity; from: 0; to: 0.6; dur: 400; dir: alternate; loop: 4; easing: easeInOutSine');
+            // Prendemos el plano del barrido y animamos el shader bajando (Y de 1 a 0)
+            barrido.setAttribute('visible', 'true');
+            barrido.setAttribute('animation__scan', 'property: material.posicionY; from: 1.0; to: 0.0; dur: 1200; loop: 3; dir: alternate; easing: easeInOutSine');
           });
 
-          // Cuando la cámara pierde la tarjeta
           target.addEventListener("targetLost", () => {
             vidAsset.pause();
             
-            // Limpiamos las animaciones
             vidEntidad.removeAttribute('animation');
-            resplandor.removeAttribute('animation__pulso'); 
+            barrido.removeAttribute('animation__scan'); 
 
-            // Reseteamos valores
             vidEntidad.setAttribute('scale', '1 0 1');
-            resplandor.setAttribute('material', 'opacity', 0); 
+            barrido.setAttribute('visible', 'false'); // Ocultamos la línea al perder cámara
           });
 
-          // Link Interactivo
           el.addEventListener('click', () => {
             window.open('https://snrlab.xyz', '_blank');
           });
         }
       });
     </script>
-    <!-- ========================================== -->
-    <!-- ¡ACÁ TERMINA EL JAVASCRIPT!                -->
-    <!-- ========================================== -->
   </head>
   
   <body>
@@ -89,12 +111,11 @@
              cursor="fuse: false; rayOrigin: mouse"
              raycaster="objects: .clickable">
       
-      <!-- Carga de Archivos -->
       <a-assets>
         <a-asset-item id="modelo-3d" src="./assets/snr_business_card.glb"></a-asset-item>
         <video id="mi-video" src="./assets/reel_snrlab.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
         
-        <!-- Máscaras (Alpha Maps) -->
+        <!-- Recordá: Tienen que ser Blanco y Negro sólido -->
         <img id="mascara-video" src="./assets/mascara_redondeada.png">
         <img id="mascara-tarjeta" src="./assets/silueta_tarjeta.png">
       </a-assets>
@@ -103,7 +124,7 @@
 
       <a-entity id="tarjeta-target" mindar-image-target="targetIndex: 0">
         
-        <!-- 0. EL OCULTADOR (Holdout) adaptado a la tarjeta de 6x9cm -->
+        <!-- OCULTADOR TIPO HOLDOUT -->
         <a-plane ocultador 
                  material="alphaMap: #mascara-tarjeta; alphaTest: 0.5" 
                  position="0 0 0" 
@@ -111,26 +132,28 @@
                  height="1.5">
         </a-plane>
 
-        <!-- 1. RESPLANDOR HOLOGRÁFICO (Efecto Escáner) -->
-        <!-- Usa el alphaMap de la tarjeta para brillar con la forma exacta -->
-        <a-plane id="resplandor-tarjeta" 
+        <!-- LÍNEA DE BARRIDO CUSTOMIZADA -->
+        <!-- Usa tu máscara y el shader exclusivo para que no desborde el troquelado -->
+        <a-plane id="barrido-tarjeta" 
                  position="0 0 0.005" 
                  width="1" 
                  height="1.5"
-                 material="color: #00FF44; shader: flat; transparent: true; opacity: 0; alphaMap: #mascara-tarjeta; alphaTest: 0.01; blending: additive">
+                 visible="false"
+                 material="shader: escaner-silueta; mascara: #mascara-tarjeta; transparent: true; blending: additive">
         </a-plane>
 
-        <!-- 2. EL VIDEO HOLOGRÁFICO (Agrandado un 50%) -->
+        <!-- VIDEO HOLOGRÁFICO CON BORDES REDONDEADOS -->
+        <!-- Le sumamos el alphaTest: 0.5 para obligarlo a recortar lo negro -->
         <a-plane id="entidad-video"
                  position="0 0 1" 
                  rotation="0 0 0" 
                  width="1.5" 
                  height="0.84375"
                  scale="1 0 1"
-                 material="src: #mi-video; alphaMap: #mascara-video; transparent: true; opacity: 0.85; shader: flat; side: double">
+                 material="src: #mi-video; alphaMap: #mascara-video; transparent: true; alphaTest: 0.5; shader: flat; side: double">
         </a-plane>
 
-        <!-- 3. EL MODELO 3D INTERACTIVO -->
+        <!-- MODELO 3D -->
         <a-entity gltf-model="#modelo-3d" 
                   id="logo-snr"
                   class="clickable"
