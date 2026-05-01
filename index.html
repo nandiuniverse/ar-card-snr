@@ -10,12 +10,14 @@
     <script src="https://cdn.jsdelivr.net/gh/fcor/aframe-gesture-handler@master/dist/aframe-gesture-handler.min.js"></script>
 
     <script>
-      // 1. EL SHADER CUSTOM: Corta la silueta y genera el láser de barrido
+      // -----------------------------------------------------
+      // SHADER 1: BARRIDO ESCÁNER (Degradado ancho y transparente)
+      // -----------------------------------------------------
       AFRAME.registerShader('escaner-silueta', {
         schema: {
           mascara: {type: 'map', is: 'uniform'},
-          colorLinea: {type: 'color', is: 'uniform', default: '#00FF44'},
-          posicionY: {type: 'number', is: 'uniform', default: 1.0}
+          colorLinea: {type: 'color', is: 'uniform', default: '#16d957'}, // Tu color exacto
+          posicionY: {type: 'number', is: 'uniform', default: 1.2}
         },
         vertexShader: `
           varying vec2 vUv;
@@ -31,24 +33,53 @@
           varying vec2 vUv;
 
           void main() {
-            // Lee la máscara JPG (Blanco y Negro)
             vec4 colorMascara = texture2D(mascara, vUv);
-            
-            // Si el pixel es negro, lo hace totalmente transparente (recorte)
             if (colorMascara.r < 0.5) discard;
             
-            // Genera la línea láser brillante
-            float grosor = 0.04;
+            float grosor = 0.20; // Degradado más amplio (antes era 0.04)
             float distancia = abs(vUv.y - posicionY);
-            float intensidad = smoothstep(grosor, 0.0, distancia);
             
-            // Dibuja el color con la opacidad de la línea
+            // Crea el difuminado y le aplica un multiplicador (* 0.7) para la transparencia
+            float intensidad = smoothstep(grosor, 0.0, distancia) * 0.7; 
+            
             gl_FragColor = vec4(colorLinea, intensidad);
           }
         `
       });
 
-      // 2. COMPONENTE OCULTADOR
+      // -----------------------------------------------------
+      // SHADER 2: VIDEO RECORTADO A PRUEBA DE BALAS
+      // -----------------------------------------------------
+      AFRAME.registerShader('video-redondeado', {
+        schema: {
+          src: {type: 'map', is: 'uniform'},      // El video
+          mascara: {type: 'map', is: 'uniform'}   // El PNG blanco y negro
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D src;
+          uniform sampler2D mascara;
+          varying vec2 vUv;
+
+          void main() {
+            vec4 colorVideo = texture2D(src, vUv);
+            vec4 colorMascara = texture2D(mascara, vUv);
+            
+            // Si la máscara es negra (las puntas), borra ese píxel
+            if (colorMascara.r < 0.5) discard;
+            
+            gl_FragColor = colorVideo;
+          }
+        `
+      });
+
+      // COMPONENTE OCULTADOR
       AFRAME.registerComponent('ocultador', {
         init: function () {
           let mesh = this.el.getObject3D('mesh');
@@ -59,7 +90,7 @@
         }
       });
 
-      // 3. COMPONENTE MAESTRO
+      // COMPONENTE MAESTRO
       AFRAME.registerComponent('logica-interactiva', {
         init: function () {
           const el = this.el;
@@ -75,12 +106,11 @@
           target.addEventListener("targetFound", () => {
             vidAsset.play();
             
-            // Apertura del video
             vidEntidad.setAttribute('animation', 'property: scale; from: 1 0 1; to: 1 1 1; dur: 1000; easing: easeOutElastic');
 
-            // Prendemos el plano del barrido y animamos el shader bajando (Y de 1 a 0)
+            // Barrido: viaja de 1.2 a -0.2 para generar una pausa en los extremos
             barrido.setAttribute('visible', 'true');
-            barrido.setAttribute('animation__scan', 'property: material.posicionY; from: 1.0; to: 0.0; dur: 1200; loop: 3; dir: alternate; easing: easeInOutSine');
+            barrido.setAttribute('animation__scan', 'property: material.posicionY; from: 1.2; to: -0.2; dur: 2500; loop: true; dir: alternate; easing: easeInOutSine');
           });
 
           target.addEventListener("targetLost", () => {
@@ -90,7 +120,7 @@
             barrido.removeAttribute('animation__scan'); 
 
             vidEntidad.setAttribute('scale', '1 0 1');
-            barrido.setAttribute('visible', 'false'); // Ocultamos la línea al perder cámara
+            barrido.setAttribute('visible', 'false'); 
           });
 
           el.addEventListener('click', () => {
@@ -102,7 +132,8 @@
   </head>
   
   <body>
-    <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF: 0.0005; filterBeta: 0.1;" 
+    <!-- ESTABILIZACIÓN: Bajamos filterMinCF a 0.0001 y filterBeta a 0.001 para que deje de vibrar -->
+    <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF: 0.0001; filterBeta: 0.001;" 
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
@@ -115,7 +146,6 @@
         <a-asset-item id="modelo-3d" src="./assets/snr_business_card.glb"></a-asset-item>
         <video id="mi-video" src="./assets/reel_snrlab.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
         
-        <!-- Recordá: Tienen que ser Blanco y Negro sólido -->
         <img id="mascara-video" src="./assets/mascara_redondeada.png">
         <img id="mascara-tarjeta" src="./assets/silueta_tarjeta.png">
       </a-assets>
@@ -124,7 +154,6 @@
 
       <a-entity id="tarjeta-target" mindar-image-target="targetIndex: 0">
         
-        <!-- OCULTADOR TIPO HOLDOUT -->
         <a-plane ocultador 
                  material="alphaMap: #mascara-tarjeta; alphaTest: 0.5" 
                  position="0 0 0" 
@@ -132,28 +161,25 @@
                  height="1.5">
         </a-plane>
 
-        <!-- LÍNEA DE BARRIDO CUSTOMIZADA -->
-        <!-- Usa tu máscara y el shader exclusivo para que no desborde el troquelado -->
+        <!-- BARRIDO CON EL SHADER ACTUALIZADO -->
         <a-plane id="barrido-tarjeta" 
                  position="0 0 0.005" 
                  width="1" 
                  height="1.5"
                  visible="false"
-                 material="shader: escaner-silueta; mascara: #mascara-tarjeta; transparent: true; blending: additive">
+                 material="shader: escaner-silueta; mascara: #mascara-tarjeta; colorLinea: #16d957; transparent: true; blending: additive">
         </a-plane>
 
-        <!-- VIDEO HOLOGRÁFICO CON BORDES REDONDEADOS -->
-        <!-- Le sumamos el alphaTest: 0.5 para obligarlo a recortar lo negro -->
+        <!-- VIDEO CON EL NUEVO SHADER RECORTADOR -->
         <a-plane id="entidad-video"
                  position="0 0 1" 
                  rotation="0 0 0" 
                  width="1.5" 
                  height="0.84375"
                  scale="1 0 1"
-                 material="src: #mi-video; alphaMap: #mascara-video; transparent: true; alphaTest: 0.5; shader: flat; side: double">
+                 material="shader: video-redondeado; src: #mi-video; mascara: #mascara-video; transparent: true; side: double">
         </a-plane>
 
-        <!-- MODELO 3D -->
         <a-entity gltf-model="#modelo-3d" 
                   id="logo-snr"
                   class="clickable"
