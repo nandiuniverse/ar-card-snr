@@ -4,16 +4,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>AR Business Card - SNR LAB</title>
     
-    <!-- 1. Librerías Base -->
+    <!-- Librerías Base -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
-    
-    <!-- 2. Librería para Gestos (Mover, Rotar, Escalar con los dedos) -->
     <script src="https://cdn.jsdelivr.net/gh/fcor/aframe-gesture-handler@master/dist/aframe-gesture-handler.min.js"></script>
 
     <script>
-      // 3. COMPONENTE MAESTRO: Controla animaciones, video, escáner y clics
+      // 1. COMPONENTE OCULTADOR: Crea la barrera invisible con la forma troquelada
+      AFRAME.registerComponent('ocultador', {
+        init: function () {
+          let mesh = this.el.getObject3D('mesh');
+          if (mesh) {
+            // No dibuja colores (lo hace invisible)
+            mesh.material.colorWrite = false;
+            // Lo renderiza primero para "cortar" la profundidad de lo que pasa por atrás
+            mesh.renderOrder = -1; 
+          }
+        }
+      });
+
+      // 2. COMPONENTE MAESTRO: Lógica de animaciones y video
       AFRAME.registerComponent('logica-interactiva', {
         init: function () {
           const el = this.el;
@@ -22,46 +33,42 @@
           const vidEntidad = document.querySelector('#entidad-video');
           const luzEscaner = document.querySelector('#luz-escaner');
 
-          // --- A. Lógica del Modelo 3D (Se reproduce todo en loop de entrada) ---
+          // Animación 3D en loop desde el inicio
           el.addEventListener('model-loaded', () => {
             el.setAttribute('animation-mixer', {
-              clip: "*", // El asterisco reproduce todas las animaciones que traiga el GLB
+              clip: "*", 
               loop: 'repeat',
               timeScale: 1.0
             });
           });
 
-          // --- B. Lógica al Detectar/Perder la Tarjeta ---
+          // Detecta la tarjeta
           target.addEventListener("targetFound", () => {
             vidAsset.play();
             
-            // Animación: Apertura del video holográfico
+            // Apertura del video (escala)
             vidEntidad.setAttribute('animation', 'property: scale; from: 1 0 1; to: 1 1 1; dur: 1000; easing: easeOutElastic');
 
-            // Animación: Barrido del láser hacia abajo
+            // Barrido del láser (Ajustado para el alto de 1.5)
             luzEscaner.setAttribute('animation__movimiento', 'property: position; from: 0 0.8 0.01; to: 0 -0.8 0.01; dur: 1500; easing: easeInOutSine');
-
-            // Animación: Destello del láser (prende y apaga)
             luzEscaner.setAttribute('animation__brillo', 'property: material.opacity; from: 0; to: 0.8; dur: 750; dir: alternate; loop: 2');
           });
 
+          // Pierde la tarjeta
           target.addEventListener("targetLost", () => {
             vidAsset.pause();
             
-            // Removemos los componentes de animación para forzar un reinicio limpio en la próxima detección
             vidEntidad.removeAttribute('animation');
             luzEscaner.removeAttribute('animation__movimiento');
             luzEscaner.removeAttribute('animation__brillo');
 
-            // Reseteamos las posiciones, opacidades y escalas al perder la cámara
             vidEntidad.setAttribute('scale', '1 0 1');
             luzEscaner.setAttribute('position', '0 0.8 0.01'); 
             luzEscaner.setAttribute('material', 'opacity', 0);
           });
 
-          // --- C. Link Interactivo ---
+          // Link Interactivo
           el.addEventListener('click', () => {
-            console.log("Abriendo web...");
             window.open('https://snrlab.xyz', '_blank');
           });
         }
@@ -70,7 +77,6 @@
   </head>
   
   <body>
-    <!-- Configuración de Escena: Filtros anti-temblor y detectores de gestos/clics -->
     <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF: 0.0005; filterBeta: 0.1;" 
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
@@ -84,13 +90,25 @@
       <a-assets>
         <a-asset-item id="modelo-3d" src="./assets/snr_business_card.glb"></a-asset-item>
         <video id="mi-video" src="./assets/reel_snrlab.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
+        
+        <!-- Máscaras (Alpha Maps) -->
+        <img id="mascara-video" src="./assets/mascara_redondeada.png">
+        <img id="mascara-tarjeta" src="./assets/silueta_tarjeta.png">
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Contenedor Principal (Enganchado a la imagen compilada) -->
       <a-entity id="tarjeta-target" mindar-image-target="targetIndex: 0">
         
+        <!-- 0. EL OCULTADOR (Holdout) adaptado a la tarjeta troquelada -->
+        <!-- alphaTest: 0.5 asegura que las zonas negras de tu máscara no "tapen" el 3D -->
+        <a-plane ocultador 
+                 material="alphaMap: #mascara-tarjeta; alphaTest: 0.5" 
+                 position="0 0 0" 
+                 width="1" 
+                 height="1.5">
+        </a-plane>
+
         <!-- 1. EL LÁSER ESCÁNER -->
         <a-plane id="luz-escaner" 
                  width="1.1" 
@@ -100,16 +118,15 @@
                  material="shader: flat; transparent: true; opacity: 0; blending: additive">
         </a-plane>
 
-        <!-- 2. EL VIDEO HOLOGRÁFICO -->
-        <a-video id="entidad-video"
-                 src="#mi-video" 
+        <!-- 2. EL VIDEO HOLOGRÁFICO (Ahora como plano con alphaMap) -->
+        <a-plane id="entidad-video"
                  position="0 0 1" 
                  rotation="0 0 0" 
                  width="1" 
                  height="0.5625"
                  scale="1 0 1"
-                 material="transparent: true; opacity: 0.85; side: double">
-        </a-video>
+                 material="src: #mi-video; alphaMap: #mascara-video; transparent: true; opacity: 0.85; shader: flat; side: double">
+        </a-plane>
 
         <!-- 3. EL MODELO 3D INTERACTIVO -->
         <a-entity gltf-model="#modelo-3d" 
