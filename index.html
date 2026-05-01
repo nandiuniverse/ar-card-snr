@@ -11,12 +11,12 @@
 
     <script>
       // -----------------------------------------------------
-      // SHADER 1: BARRIDO ESCÁNER (Degradado ancho y transparente)
+      // SHADER 1: BARRIDO ESCÁNER 
       // -----------------------------------------------------
       AFRAME.registerShader('escaner-silueta', {
         schema: {
           mascara: {type: 'map', is: 'uniform'},
-          colorLinea: {type: 'color', is: 'uniform', default: '#16d957'}, // Tu color exacto
+          colorLinea: {type: 'color', is: 'uniform', default: '#16d957'},
           posicionY: {type: 'number', is: 'uniform', default: 1.2}
         },
         vertexShader: `
@@ -36,10 +36,9 @@
             vec4 colorMascara = texture2D(mascara, vUv);
             if (colorMascara.r < 0.5) discard;
             
-            float grosor = 0.20; // Degradado más amplio (antes era 0.04)
+            float grosor = 0.20; 
             float distancia = abs(vUv.y - posicionY);
             
-            // Crea el difuminado y le aplica un multiplicador (* 0.7) para la transparencia
             float intensidad = smoothstep(grosor, 0.0, distancia) * 0.7; 
             
             gl_FragColor = vec4(colorLinea, intensidad);
@@ -52,8 +51,8 @@
       // -----------------------------------------------------
       AFRAME.registerShader('video-redondeado', {
         schema: {
-          src: {type: 'map', is: 'uniform'},      // El video
-          mascara: {type: 'map', is: 'uniform'}   // El PNG blanco y negro
+          src: {type: 'map', is: 'uniform'},      
+          mascara: {type: 'map', is: 'uniform'}   
         },
         vertexShader: `
           varying vec2 vUv;
@@ -71,7 +70,6 @@
             vec4 colorVideo = texture2D(src, vUv);
             vec4 colorMascara = texture2D(mascara, vUv);
             
-            // Si la máscara es negra (las puntas), borra ese píxel
             if (colorMascara.r < 0.5) discard;
             
             gl_FragColor = colorVideo;
@@ -108,7 +106,6 @@
             
             vidEntidad.setAttribute('animation', 'property: scale; from: 1 0 1; to: 1 1 1; dur: 1000; easing: easeOutElastic');
 
-            // Barrido: viaja de 1.2 a -0.2 para generar una pausa en los extremos
             barrido.setAttribute('visible', 'true');
             barrido.setAttribute('animation__scan', 'property: material.posicionY; from: 1.2; to: -0.2; dur: 2500; loop: true; dir: alternate; easing: easeInOutSine');
           });
@@ -132,8 +129,8 @@
   </head>
   
   <body>
-    <!-- ESTABILIZACIÓN: Bajamos filterMinCF a 0.0001 y filterBeta a 0.001 para que deje de vibrar -->
-    <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF: 0.0001; filterBeta: 0.001;" 
+    <!-- VOLVIMOS A LOS VALORES ORIGINALES: filterMinCF: 0.0005 y filterBeta: 0.1 -->
+    <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF: 0.0005; filterBeta: 0.1;" 
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
@@ -161,7 +158,6 @@
                  height="1.5">
         </a-plane>
 
-        <!-- BARRIDO CON EL SHADER ACTUALIZADO -->
         <a-plane id="barrido-tarjeta" 
                  position="0 0 0.005" 
                  width="1" 
@@ -170,7 +166,6 @@
                  material="shader: escaner-silueta; mascara: #mascara-tarjeta; colorLinea: #16d957; transparent: true; blending: additive">
         </a-plane>
 
-        <!-- VIDEO CON EL NUEVO SHADER RECORTADOR -->
         <a-plane id="entidad-video"
                  position="0 0 1" 
                  rotation="0 0 0" 
