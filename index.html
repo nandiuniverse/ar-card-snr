@@ -10,15 +10,16 @@
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/fcor/aframe-gesture-handler@master/dist/aframe-gesture-handler.min.js"></script>
 
+    <!-- ========================================== -->
+    <!-- ¡ACÁ EMPIEZA EL JAVASCRIPT!                -->
+    <!-- ========================================== -->
     <script>
       // 1. COMPONENTE OCULTADOR: Crea la barrera invisible con la forma troquelada
       AFRAME.registerComponent('ocultador', {
         init: function () {
           let mesh = this.el.getObject3D('mesh');
           if (mesh) {
-            // No dibuja colores (lo hace invisible)
             mesh.material.colorWrite = false;
-            // Lo renderiza primero para "cortar" la profundidad de lo que pasa por atrás
             mesh.renderOrder = -1; 
           }
         }
@@ -31,7 +32,7 @@
           const target = document.querySelector('#tarjeta-target');
           const vidAsset = document.querySelector('#mi-video');
           const vidEntidad = document.querySelector('#entidad-video');
-          const luzEscaner = document.querySelector('#luz-escaner');
+          const resplandor = document.querySelector('#resplandor-tarjeta'); // <- Capturamos el resplandor
 
           // Animación 3D en loop desde el inicio
           el.addEventListener('model-loaded', () => {
@@ -42,29 +43,28 @@
             });
           });
 
-          // Detecta la tarjeta
+          // Cuando la cámara detecta la tarjeta
           target.addEventListener("targetFound", () => {
             vidAsset.play();
             
             // Apertura del video (escala)
             vidEntidad.setAttribute('animation', 'property: scale; from: 1 0 1; to: 1 1 1; dur: 1000; easing: easeOutElastic');
 
-            // Barrido del láser (Ajustado para el alto de 1.5)
-            luzEscaner.setAttribute('animation__movimiento', 'property: position; from: 0 0.8 0.01; to: 0 -0.8 0.01; dur: 1500; easing: easeInOutSine');
-            luzEscaner.setAttribute('animation__brillo', 'property: material.opacity; from: 0; to: 0.8; dur: 750; dir: alternate; loop: 2');
+            // El resplandor palpita (se prende y apaga 4 veces)
+            resplandor.setAttribute('animation__pulso', 'property: material.opacity; from: 0; to: 0.6; dur: 400; dir: alternate; loop: 4; easing: easeInOutSine');
           });
 
-          // Pierde la tarjeta
+          // Cuando la cámara pierde la tarjeta
           target.addEventListener("targetLost", () => {
             vidAsset.pause();
             
+            // Limpiamos las animaciones
             vidEntidad.removeAttribute('animation');
-            luzEscaner.removeAttribute('animation__movimiento');
-            luzEscaner.removeAttribute('animation__brillo');
+            resplandor.removeAttribute('animation__pulso'); 
 
+            // Reseteamos valores
             vidEntidad.setAttribute('scale', '1 0 1');
-            luzEscaner.setAttribute('position', '0 0.8 0.01'); 
-            luzEscaner.setAttribute('material', 'opacity', 0);
+            resplandor.setAttribute('material', 'opacity', 0); 
           });
 
           // Link Interactivo
@@ -74,6 +74,9 @@
         }
       });
     </script>
+    <!-- ========================================== -->
+    <!-- ¡ACÁ TERMINA EL JAVASCRIPT!                -->
+    <!-- ========================================== -->
   </head>
   
   <body>
@@ -100,8 +103,7 @@
 
       <a-entity id="tarjeta-target" mindar-image-target="targetIndex: 0">
         
-        <!-- 0. EL OCULTADOR (Holdout) adaptado a la tarjeta troquelada -->
-        <!-- alphaTest: 0.5 asegura que las zonas negras de tu máscara no "tapen" el 3D -->
+        <!-- 0. EL OCULTADOR (Holdout) adaptado a la tarjeta de 6x9cm -->
         <a-plane ocultador 
                  material="alphaMap: #mascara-tarjeta; alphaTest: 0.5" 
                  position="0 0 0" 
@@ -109,16 +111,16 @@
                  height="1.5">
         </a-plane>
 
-        <!-- 1. EL LÁSER ESCÁNER -->
-        <a-plane id="luz-escaner" 
-                 width="1.1" 
-                 height="0.08" 
-                 position="0 0.8 0.01" 
-                 color="#00FF44" 
-                 material="shader: flat; transparent: true; opacity: 0; blending: additive">
+        <!-- 1. RESPLANDOR HOLOGRÁFICO (Efecto Escáner) -->
+        <!-- Usa el alphaMap de la tarjeta para brillar con la forma exacta -->
+        <a-plane id="resplandor-tarjeta" 
+                 position="0 0 0.005" 
+                 width="1" 
+                 height="1.5"
+                 material="color: #00FF44; shader: flat; transparent: true; opacity: 0; alphaMap: #mascara-tarjeta; alphaTest: 0.01; blending: additive">
         </a-plane>
 
-        <!-- 2. EL VIDEO HOLOGRÁFICO (Ahora como plano con alphaMap) -->
+        <!-- 2. EL VIDEO HOLOGRÁFICO (Agrandado un 50%) -->
         <a-plane id="entidad-video"
                  position="0 0 1" 
                  rotation="0 0 0" 
