@@ -10,85 +10,45 @@
     <script src="https://cdn.jsdelivr.net/gh/fcor/aframe-gesture-handler@master/dist/aframe-gesture-handler.min.js"></script>
 
     <script>
-      // -----------------------------------------------------
       // SHADER 1: BARRIDO ESCÁNER 
-      // -----------------------------------------------------
       AFRAME.registerShader('escaner-silueta', {
         schema: {
           mascara: {type: 'map', is: 'uniform'},
           colorLinea: {type: 'color', is: 'uniform', default: '#16d957'},
           posicionY: {type: 'number', is: 'uniform', default: 1.2}
         },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
+        vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
         fragmentShader: `
-          uniform sampler2D mascara;
-          uniform vec3 colorLinea;
-          uniform float posicionY;
-          varying vec2 vUv;
-
+          uniform sampler2D mascara; uniform vec3 colorLinea; uniform float posicionY; varying vec2 vUv;
           void main() {
             vec4 colorMascara = texture2D(mascara, vUv);
             if (colorMascara.r < 0.5) discard;
-            
-            float grosor = 0.20; 
-            float distancia = abs(vUv.y - posicionY);
-            
+            float grosor = 0.20; float distancia = abs(vUv.y - posicionY);
             float intensidad = smoothstep(grosor, 0.0, distancia) * 0.7; 
-            
             gl_FragColor = vec4(colorLinea, intensidad);
-          }
-        `
+          }`
       });
 
-      // -----------------------------------------------------
-      // SHADER 2: VIDEO RECORTADO A PRUEBA DE BALAS
-      // -----------------------------------------------------
+      // SHADER 2: VIDEO RECORTADO
       AFRAME.registerShader('video-redondeado', {
-        schema: {
-          src: {type: 'map', is: 'uniform'},      
-          mascara: {type: 'map', is: 'uniform'}   
-        },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
+        schema: { src: {type: 'map', is: 'uniform'}, mascara: {type: 'map', is: 'uniform'} },
+        vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
         fragmentShader: `
-          uniform sampler2D src;
-          uniform sampler2D mascara;
-          varying vec2 vUv;
-
+          uniform sampler2D src; uniform sampler2D mascara; varying vec2 vUv;
           void main() {
-            vec4 colorVideo = texture2D(src, vUv);
-            vec4 colorMascara = texture2D(mascara, vUv);
-            
+            vec4 colorVideo = texture2D(src, vUv); vec4 colorMascara = texture2D(mascara, vUv);
             if (colorMascara.r < 0.5) discard;
-            
             gl_FragColor = colorVideo;
-          }
-        `
+          }`
       });
 
-      // COMPONENTE OCULTADOR
       AFRAME.registerComponent('ocultador', {
         init: function () {
           let mesh = this.el.getObject3D('mesh');
-          if (mesh) {
-            mesh.material.colorWrite = false;
-            mesh.renderOrder = -1; 
-          }
+          if (mesh) { mesh.material.colorWrite = false; mesh.renderOrder = -1; }
         }
       });
 
-      // COMPONENTE MAESTRO
       AFRAME.registerComponent('logica-interactiva', {
         init: function () {
           const el = this.el;
@@ -104,45 +64,57 @@
           target.addEventListener("targetFound", () => {
             vidAsset.play();
             
-            vidEntidad.setAttribute('animation', 'property: scale; from: 1 0 1; to: 1 1 1; dur: 1000; easing: easeOutElastic');
+            // 1. ANIMACIÓN DE EXPANSIÓN (Logo y Video)
+            // Salen desde 0 hasta su tamaño final con efecto rebote
+            el.setAttribute('animation__entrada', {
+              property: 'scale',
+              from: '0 0 0',
+              to: '1 1 1',
+              dur: 1200,
+              easing: 'easeOutElastic'
+            });
 
+            vidEntidad.setAttribute('animation__entrada', {
+              property: 'scale',
+              from: '0 0 0',
+              to: '1 1 1',
+              dur: 1000,
+              delay: 200, // El video sale un pelín después que el logo
+              easing: 'easeOutBack'
+            });
+
+            // 2. BARRIDO ESCÁNER
             barrido.setAttribute('visible', 'true');
             barrido.setAttribute('animation__scan', 'property: material.posicionY; from: 1.2; to: -0.2; dur: 2500; loop: true; dir: alternate; easing: easeInOutSine');
           });
 
           target.addEventListener("targetLost", () => {
             vidAsset.pause();
-            
-            vidEntidad.removeAttribute('animation');
+            el.removeAttribute('animation__entrada');
+            vidEntidad.removeAttribute('animation__entrada');
             barrido.removeAttribute('animation__scan'); 
 
-            vidEntidad.setAttribute('scale', '1 0 1');
+            // Reseteamos a escala 0 para que vuelvan a expandirse la próxima vez
+            el.setAttribute('scale', '0 0 0');
+            vidEntidad.setAttribute('scale', '0 0 0');
             barrido.setAttribute('visible', 'false'); 
           });
 
-          el.addEventListener('click', () => {
-            window.open('https://snrlab.xyz', '_blank');
-          });
+          el.addEventListener('click', () => { window.open('https://snrlab.xyz', '_blank'); });
         }
       });
     </script>
   </head>
   
   <body>
-    <!-- VOLVIMOS A LOS VALORES ORIGINALES: filterMinCF: 0.0005 y filterBeta: 0.1 -->
     <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF: 0.0005; filterBeta: 0.1;" 
-             color-space="sRGB" 
-             renderer="colorManagement: true, physicallyCorrectLights" 
-             vr-mode-ui="enabled: false" 
-             device-orientation-permission-ui="enabled: false"
-             gesture-detector
-             cursor="fuse: false; rayOrigin: mouse"
-             raycaster="objects: .clickable">
+             color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" 
+             vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"
+             gesture-detector cursor="fuse: false; rayOrigin: mouse" raycaster="objects: .clickable">
       
       <a-assets>
         <a-asset-item id="modelo-3d" src="./assets/snr_business_card.glb"></a-asset-item>
         <video id="mi-video" src="./assets/reel_snrlab.mp4" preload="auto" loop muted playsinline webkit-playsinline></video> 
-        
         <img id="mascara-video" src="./assets/mascara_redondeada.png">
         <img id="mascara-tarjeta" src="./assets/silueta_tarjeta.png">
       </a-assets>
@@ -151,39 +123,16 @@
 
       <a-entity id="tarjeta-target" mindar-image-target="targetIndex: 0">
         
-        <a-plane ocultador 
-                 material="alphaMap: #mascara-tarjeta; alphaTest: 0.5" 
-                 position="0 0 0" 
-                 width="1" 
-                 height="1.5">
-        </a-plane>
+        <a-plane ocultador material="alphaMap: #mascara-tarjeta; alphaTest: 0.5" position="0 0 0" width="1" height="1.5"></a-plane>
 
-        <a-plane id="barrido-tarjeta" 
-                 position="0 0 0.005" 
-                 width="1" 
-                 height="1.5"
-                 visible="false"
-                 material="shader: escaner-silueta; mascara: #mascara-tarjeta; colorLinea: #16d957; transparent: true; blending: additive">
-        </a-plane>
+        <a-plane id="barrido-tarjeta" position="0 0 0.005" width="1" height="1.5" visible="false"
+                 material="shader: escaner-silueta; mascara: #mascara-tarjeta; colorLinea: #16d957; transparent: true; blending: additive"></a-plane>
 
-        <a-plane id="entidad-video"
-                 position="0 0 1" 
-                 rotation="0 0 0" 
-                 width="1.5" 
-                 height="0.84375"
-                 scale="1 0 1"
-                 material="shader: video-redondeado; src: #mi-video; mascara: #mascara-video; transparent: true; side: double">
-        </a-plane>
+        <a-plane id="entidad-video" position="0 0 1" rotation="0 0 0" width="1.5" height="0.84375" scale="0 0 0"
+                 material="shader: video-redondeado; src: #mi-video; mascara: #mascara-video; transparent: true; side: double"></a-plane>
 
-        <a-entity gltf-model="#modelo-3d" 
-                  id="logo-snr"
-                  class="clickable"
-                  position="0 0 0" 
-                  rotation="90 0 0"
-                  scale="1 1 1" 
-                  gesture-handler
-                  logica-interactiva>
-        </a-entity>
+        <a-entity gltf-model="#modelo-3d" id="logo-snr" class="clickable" position="0 0 0" rotation="90 0 0" scale="0 0 0" 
+                  gesture-handler logica-interactiva></a-entity>
 
       </a-entity>
     </a-scene>
