@@ -10,19 +10,21 @@
     <script src="https://cdn.jsdelivr.net/gh/fcor/aframe-gesture-handler@master/dist/aframe-gesture-handler.min.js"></script>
 
     <style>
-      /* Fondo del escáner: semitranslúcido oscuro para mejor enfoque */
+      /* Fondo oscuro semitranslúcido en el overlay de escaneo para resaltar las líneas */
       .mindar-ui-overlay .mindar-ui-scanning {
         background-color: rgba(0, 0, 0, 0.5) !important;
       }
       
-      /* Marco con cuatro vértices: Finos y del color verde SNR LAB */
-      .mindar-ui-overlay .mindar-ui-scanning div {
-        border-color: #16d957 !important; /* Tu color #16d957 */
-        border-width: 2px !important;    /* Líneas finas */
+      /* MindAR structure: .mindar-ui-overlay -> .mindar-ui-scanning -> div.scanning -> 4 divs para las esquinas */
+      /* Aplicamos el color verde pleno y sólido directamente a los bordes de los 4 divs de las esquinas */
+      .mindar-ui-scanning .scanning div {
+        border-color: #16d957 !important; /* El color verde de SNR LAB */
+        border-width: 3px !important;    /* Un grosor mayor para que sean sólidos y plenos */
+        border-style: solid !important; /* Asegura líneas sólidas, no desvanecidas */
+        opacity: 1 !important;          /* Opacidad plena en el color del borde */
       }
     </style>
     <script>
-      // (Shaders, Componentes y Lógica JS se mantienen igual...)
       
       // SHADER 1: BARRIDO ESCÁNER (Degradado ancho y transparente)
       AFRAME.registerShader('escaner-silueta', {
@@ -73,6 +75,7 @@
           const vidEntidad = document.querySelector('#entidad-video');
           const barrido = document.querySelector('#barrido-tarjeta'); 
           const hintText = document.querySelector('#hint-text'); 
+          const videoClickTarget = document.querySelector('#video-click-target'); // Referencia al target de clic
 
           el.addEventListener('model-loaded', () => {
             el.setAttribute('animation-mixer', { clip: "*", loop: 'repeat', timeScale: 1.0 });
@@ -85,6 +88,7 @@
             el.setAttribute('animation__entrada_logo', { property: 'scale', from: '0 0 0', to: '1 1 1', dur: 1800, easing: 'easeOutElastic' });
             vidEntidad.setAttribute('animation__entrada_vid', { property: 'scale', from: '0 0 0', to: '1 1 1', dur: 1500, delay: 300, easing: 'easeOutElastic' });
             hintText.setAttribute('animation__entrada_text', { property: 'scale', from: '0 0 0', to: '1 1 1', dur: 1200, delay: 600, easing: 'easeOutElastic' });
+            videoClickTarget.setAttribute('scale', '1 1 1'); // Aseguramos que sea detectable
 
             // Barrido escáner
             barrido.setAttribute('visible', 'true');
@@ -101,11 +105,16 @@
             vidEntidad.setAttribute('scale', '0 0 0');
             el.setAttribute('scale', '0 0 0');
             hintText.setAttribute('scale', '0 0 0');
+            videoClickTarget.setAttribute('scale', '0 0 0'); // Lo apagamos
             barrido.setAttribute('visible', 'false'); 
           });
 
-          // Interactividad (Click en VIDEO te lleva a la web)
-          vidEntidad.addEventListener('click', () => { window.open('https://snrlab.io/', '_blank'); });
+          // 2. INTERACTIVIDAD (Click en VIDEO te lleva a la web - Usamos el target robusto)
+          videoClickTarget.addEventListener('click', () => { 
+            console.log("Abriendo web SNR LAB desde video...");
+            window.open('https://snrlab.io/', '_blank');
+          });
+          
           el.addEventListener('click', () => { window.open('https://snrlab.io/', '_blank'); });
         }
       });
@@ -138,10 +147,17 @@
         <a-plane id="barrido-tarjeta" position="0 0 0.005" width="1" height="1.5" visible="false"
                  material="shader: escaner-silueta; mascara: #mascara-tarjeta; colorLinea: #16d957; transparent: true; blending: additive"></a-plane>
 
-        <a-plane id="entidad-video" class="clickable" position="0 0 1" rotation="0 0 0" width="1.5" height="0.84375" scale="0 0 0"
+        <a-plane id="entidad-video" position="0 0 1" rotation="0 0 0" width="1.5" height="0.84375" scale="0 0 0"
                  material="shader: video-redondeado; src: #mi-video; mascara: #mascara-video; transparent: true; side: double"></a-plane>
 
-        <a-text id="hint-text" value="click en el video para ir a la web." color="#16d957" align="center" position="0 -0.55 1.01" width="1" scale="0 0 0" font="mozillavr"></a-text>
+        <a-entity id="video-click-target" 
+                  class="clickable"
+                  geometry="primitive: plane; width: 1.5; height: 0.84375"
+                  material="opacity: 0; transparent: true"
+                  position="0 0 1.005"
+                  scale="0 0 0"></a-entity>
+
+        <a-text id="hint-text" value="click en el video para ir a la web." color="#16d957" align="center" position="0 -0.48 1.01" width="0.8" scale="0 0 0" font="mozillavr"></a-text>
 
         <a-entity gltf-model="#modelo-3d" id="logo-snr" class="clickable" position="0 0 0" rotation="90 0 0" scale="0 0 0" gesture-handler logica-interactiva></a-entity>
 
