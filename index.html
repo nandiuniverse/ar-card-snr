@@ -9,8 +9,22 @@
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/fcor/aframe-gesture-handler@master/dist/aframe-gesture-handler.min.js"></script>
 
+    <style>
+      /* Fondo del escáner: semitranslúcido oscuro para mejor enfoque */
+      .mindar-ui-overlay .mindar-ui-scanning {
+        background-color: rgba(0, 0, 0, 0.5) !important;
+      }
+      
+      /* Marco con cuatro vértices: Finos y del color verde SNR LAB */
+      .mindar-ui-overlay .mindar-ui-scanning div {
+        border-color: #16d957 !important; /* Tu color #16d957 */
+        border-width: 2px !important;    /* Líneas finas */
+      }
+    </style>
     <script>
-      // SHADER 1: BARRIDO ESCÁNER 
+      // (Shaders, Componentes y Lógica JS se mantienen igual...)
+      
+      // SHADER 1: BARRIDO ESCÁNER (Degradado ancho y transparente)
       AFRAME.registerShader('escaner-silueta', {
         schema: {
           mascara: {type: 'map', is: 'uniform'},
@@ -29,7 +43,7 @@
           }`
       });
 
-      // SHADER 2: VIDEO RECORTADO
+      // SHADER 2: VIDEO RECORTADO A PRUEBA DE BALAS
       AFRAME.registerShader('video-redondeado', {
         schema: { src: {type: 'map', is: 'uniform'}, mascara: {type: 'map', is: 'uniform'} },
         vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -42,6 +56,7 @@
           }`
       });
 
+      // COMPONENTE OCULTADOR
       AFRAME.registerComponent('ocultador', {
         init: function () {
           let mesh = this.el.getObject3D('mesh');
@@ -49,6 +64,7 @@
         }
       });
 
+      // COMPONENTE MAESTRO
       AFRAME.registerComponent('logica-interactiva', {
         init: function () {
           const el = this.el;
@@ -56,6 +72,7 @@
           const vidAsset = document.querySelector('#mi-video');
           const vidEntidad = document.querySelector('#entidad-video');
           const barrido = document.querySelector('#barrido-tarjeta'); 
+          const hintText = document.querySelector('#hint-text'); 
 
           el.addEventListener('model-loaded', () => {
             el.setAttribute('animation-mixer', { clip: "*", loop: 'repeat', timeScale: 1.0 });
@@ -64,43 +81,32 @@
           target.addEventListener("targetFound", () => {
             vidAsset.play();
             
-            // 1. ANIMACIÓN DE EXPANSIÓN (Logo y Video)
-            // Salen desde 0 hasta su tamaño final con efecto rebote
-            el.setAttribute('animation__entrada', {
-              property: 'scale',
-              from: '0 0 0',
-              to: '1 1 1',
-              dur: 1200,
-              easing: 'easeOutElastic'
-            });
+            // Animaciones de entrada expandida
+            el.setAttribute('animation__entrada_logo', { property: 'scale', from: '0 0 0', to: '1 1 1', dur: 1800, easing: 'easeOutElastic' });
+            vidEntidad.setAttribute('animation__entrada_vid', { property: 'scale', from: '0 0 0', to: '1 1 1', dur: 1500, delay: 300, easing: 'easeOutElastic' });
+            hintText.setAttribute('animation__entrada_text', { property: 'scale', from: '0 0 0', to: '1 1 1', dur: 1200, delay: 600, easing: 'easeOutElastic' });
 
-            vidEntidad.setAttribute('animation__entrada', {
-              property: 'scale',
-              from: '0 0 0',
-              to: '1 1 1',
-              dur: 1000,
-              delay: 200, // El video sale un pelín después que el logo
-              easing: 'easeOutBack'
-            });
-
-            // 2. BARRIDO ESCÁNER
+            // Barrido escáner
             barrido.setAttribute('visible', 'true');
             barrido.setAttribute('animation__scan', 'property: material.posicionY; from: 1.2; to: -0.2; dur: 2500; loop: true; dir: alternate; easing: easeInOutSine');
           });
 
           target.addEventListener("targetLost", () => {
             vidAsset.pause();
-            el.removeAttribute('animation__entrada');
-            vidEntidad.removeAttribute('animation__entrada');
+            vidEntidad.removeAttribute('animation__entrada_vid');
+            el.removeAttribute('animation__entrada_logo');
+            hintText.removeAttribute('animation__entrada_text');
             barrido.removeAttribute('animation__scan'); 
 
-            // Reseteamos a escala 0 para que vuelvan a expandirse la próxima vez
-            el.setAttribute('scale', '0 0 0');
             vidEntidad.setAttribute('scale', '0 0 0');
+            el.setAttribute('scale', '0 0 0');
+            hintText.setAttribute('scale', '0 0 0');
             barrido.setAttribute('visible', 'false'); 
           });
 
-          el.addEventListener('click', () => { window.open('https://snrlab.xyz', '_blank'); });
+          // Interactividad (Click en VIDEO te lleva a la web)
+          vidEntidad.addEventListener('click', () => { window.open('https://snrlab.io/', '_blank'); });
+          el.addEventListener('click', () => { window.open('https://snrlab.io/', '_blank'); });
         }
       });
     </script>
@@ -108,9 +114,13 @@
   
   <body>
     <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF: 0.0005; filterBeta: 0.1;" 
-             color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" 
-             vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"
-             gesture-detector cursor="fuse: false; rayOrigin: mouse" raycaster="objects: .clickable">
+             color-space="sRGB" 
+             renderer="colorManagement: true, physicallyCorrectLights" 
+             vr-mode-ui="enabled: false" 
+             device-orientation-permission-ui="enabled: false"
+             gesture-detector
+             cursor="fuse: false; rayOrigin: mouse"
+             raycaster="objects: .clickable">
       
       <a-assets>
         <a-asset-item id="modelo-3d" src="./assets/snr_business_card.glb"></a-asset-item>
@@ -128,11 +138,12 @@
         <a-plane id="barrido-tarjeta" position="0 0 0.005" width="1" height="1.5" visible="false"
                  material="shader: escaner-silueta; mascara: #mascara-tarjeta; colorLinea: #16d957; transparent: true; blending: additive"></a-plane>
 
-        <a-plane id="entidad-video" position="0 0 1" rotation="0 0 0" width="1.5" height="0.84375" scale="0 0 0"
+        <a-plane id="entidad-video" class="clickable" position="0 0 1" rotation="0 0 0" width="1.5" height="0.84375" scale="0 0 0"
                  material="shader: video-redondeado; src: #mi-video; mascara: #mascara-video; transparent: true; side: double"></a-plane>
 
-        <a-entity gltf-model="#modelo-3d" id="logo-snr" class="clickable" position="0 0 0" rotation="90 0 0" scale="0 0 0" 
-                  gesture-handler logica-interactiva></a-entity>
+        <a-text id="hint-text" value="click en el video para ir a la web." color="#16d957" align="center" position="0 -0.55 1.01" width="1" scale="0 0 0" font="mozillavr"></a-text>
+
+        <a-entity gltf-model="#modelo-3d" id="logo-snr" class="clickable" position="0 0 0" rotation="90 0 0" scale="0 0 0" gesture-handler logica-interactiva></a-entity>
 
       </a-entity>
     </a-scene>
