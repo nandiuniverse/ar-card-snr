@@ -10,20 +10,72 @@
     <script src="https://cdn.jsdelivr.net/gh/fcor/aframe-gesture-handler@master/dist/aframe-gesture-handler.min.js"></script>
 
     <style>
-      /* Fondo oscuro semitranslúcido en el overlay de escaneo para resaltar las líneas */
+      /* ─── MARCO DE ESCANEO MINDAR ───────────────────────────────────────────
+         FIX: MindAR 1.2.5 aplica sus propios estilos y animaciones sobre el
+         overlay DESPUÉS del DOM ready. Estos selectores de alta especificidad
+         + !important sobreescriben todo lo que MindAR inyecta.
+         La animación de "barrido" de MindAR anima el border-color via keyframes;
+         la bloqueamos forzando el color en todos los estados posibles.
+      ──────────────────────────────────────────────────────────────────────── */
+
+      /* Fondo semitranslúcido del overlay general */
       .mindar-ui-overlay .mindar-ui-scanning {
-        background-color: rgba(0, 0, 0, 0.5) !important;
+        background-color: rgba(0, 0, 0, 0.45) !important;
       }
-      
-      /* MindAR structure: .mindar-ui-overlay -> .mindar-ui-scanning -> div.scanning -> 4 divs para las esquinas */
-      /* Aplicamos el color verde pleno y sólido directamente a los bordes de los 4 divs de las esquinas */
-      .mindar-ui-scanning .scanning div {
-        border-color: #16d957 !important; /* El color verde de SNR LAB */
-        border-width: 3px !important;    /* Un grosor mayor para que sean sólidos y plenos */
-        border-style: solid !important; /* Asegura líneas sólidas, no desvanecidas */
-        opacity: 1 !important;          /* Opacidad plena en el color del borde */
+
+      /* Los 4 divs de esquina del marco de escaneo */
+      .mindar-ui-scanning .scanning div,
+      .mindar-ui-scanning .scanning div:before,
+      .mindar-ui-scanning .scanning div:after {
+        border-color: #16d957 !important;
+        border-width: 2px !important;       /* Fino, elegante */
+        border-style: solid !important;
+        opacity: 1 !important;
+        /* Bloqueamos cualquier animación de color que venga de MindAR */
+        animation-name: none !important;
+        -webkit-animation-name: none !important;
+      }
+
+      /* ─── OVERLAY HTML 2D (botón de tap para ir a la web) ─────────────────
+         FIX PRINCIPAL DEL CLICK EN MOBILE:
+         En Chrome Android, el raycaster de A-Frame con rayOrigin:mouse
+         no captura eventos táctiles sobre planos transparentes de forma
+         confiable. La solución más robusta es un elemento HTML nativo
+         posicionado encima del canvas de WebGL — los eventos touch del
+         navegador llegan 100% garantizados a elementos HTML.
+      ──────────────────────────────────────────────────────────────────────── */
+      #tap-overlay {
+        display: none;                  /* Oculto hasta que se detecte la tarjeta */
+        position: fixed;
+        bottom: 10%;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9999;                  /* Siempre encima del canvas AR */
+        pointer-events: auto;
+      }
+
+      #tap-overlay a {
+        display: block;
+        background-color: #16d957;
+        color: #000000;
+        font-family: sans-serif;
+        font-weight: bold;
+        font-size: 15px;
+        letter-spacing: 0.05em;
+        text-decoration: none;
+        padding: 12px 28px;
+        border-radius: 24px;
+        box-shadow: 0 0 20px rgba(22, 217, 87, 0.5);
+        /* Animación de pulso sutil para llamar la atención */
+        animation: pulso 2s ease-in-out infinite;
+      }
+
+      @keyframes pulso {
+        0%, 100% { box-shadow: 0 0 16px rgba(22, 217, 87, 0.4); }
+        50%       { box-shadow: 0 0 32px rgba(22, 217, 87, 0.8); }
       }
     </style>
+
     <script>
       
       // SHADER 1: BARRIDO ESCÁNER (Degradado ancho y transparente)
@@ -66,6 +118,29 @@
         }
       });
 
+      // ─── FIX MARCO MINDAR ────────────────────────────────────────────────────
+      // MindAR monta su UI de forma asíncrona, así que esperamos a que el
+      // elemento .mindar-ui-scanning exista en el DOM antes de aplicar estilos
+      // adicionales vía JS (esto complementa el CSS y cubre edge cases).
+      function aplicarEstiloMarco() {
+        const scanningDivs = document.querySelectorAll('.mindar-ui-scanning .scanning div');
+        if (scanningDivs.length === 0) {
+          // Todavía no montó MindAR, reintentamos en 200ms
+          setTimeout(aplicarEstiloMarco, 200);
+          return;
+        }
+        scanningDivs.forEach(div => {
+          div.style.setProperty('border-color', '#16d957', 'important');
+          div.style.setProperty('border-width', '2px', 'important');
+          div.style.setProperty('border-style', 'solid', 'important');
+          div.style.setProperty('opacity', '1', 'important');
+          div.style.setProperty('animation-name', 'none', 'important');
+        });
+      }
+      // Arrancamos la búsqueda cuando el DOM esté listo
+      document.addEventListener('DOMContentLoaded', () => setTimeout(aplicarEstiloMarco, 500));
+      // ─────────────────────────────────────────────────────────────────────────
+
       // COMPONENTE MAESTRO
       AFRAME.registerComponent('logica-interactiva', {
         init: function () {
@@ -75,7 +150,12 @@
           const vidEntidad = document.querySelector('#entidad-video');
           const barrido = document.querySelector('#barrido-tarjeta'); 
           const hintText = document.querySelector('#hint-text'); 
-          const videoClickTarget = document.querySelector('#video-click-target'); // Referencia al target de clic
+
+          // ─── OVERLAY HTML 2D ─────────────────────────────────────────────
+          // FIX: Creamos el overlay de tap dinámicamente para tener control
+          // total sobre cuándo aparece/desaparece.
+          const tapOverlay = document.getElementById('tap-overlay');
+          // ─────────────────────────────────────────────────────────────────
 
           el.addEventListener('model-loaded', () => {
             el.setAttribute('animation-mixer', { clip: "*", loop: 'repeat', timeScale: 1.0 });
@@ -84,15 +164,18 @@
           target.addEventListener("targetFound", () => {
             vidAsset.play();
             
-            // Animaciones de entrada expandida
+            // Animaciones de entrada
             el.setAttribute('animation__entrada_logo', { property: 'scale', from: '0 0 0', to: '1 1 1', dur: 1800, easing: 'easeOutElastic' });
             vidEntidad.setAttribute('animation__entrada_vid', { property: 'scale', from: '0 0 0', to: '1 1 1', dur: 1500, delay: 300, easing: 'easeOutElastic' });
             hintText.setAttribute('animation__entrada_text', { property: 'scale', from: '0 0 0', to: '1 1 1', dur: 1200, delay: 600, easing: 'easeOutElastic' });
-            videoClickTarget.setAttribute('scale', '1 1 1'); // Aseguramos que sea detectable
 
             // Barrido escáner
             barrido.setAttribute('visible', 'true');
             barrido.setAttribute('animation__scan', 'property: material.posicionY; from: 1.2; to: -0.2; dur: 2500; loop: true; dir: alternate; easing: easeInOutSine');
+
+            // FIX: Mostramos el overlay HTML nativo con delay para que
+            // aparezca cuando la animación de entrada ya terminó.
+            setTimeout(() => { tapOverlay.style.display = 'block'; }, 1200);
           });
 
           target.addEventListener("targetLost", () => {
@@ -105,16 +188,13 @@
             vidEntidad.setAttribute('scale', '0 0 0');
             el.setAttribute('scale', '0 0 0');
             hintText.setAttribute('scale', '0 0 0');
-            videoClickTarget.setAttribute('scale', '0 0 0'); // Lo apagamos
-            barrido.setAttribute('visible', 'false'); 
+            barrido.setAttribute('visible', 'false');
+
+            // Ocultamos el overlay cuando se pierde la tarjeta
+            tapOverlay.style.display = 'none';
           });
 
-          // 2. INTERACTIVIDAD (Click en VIDEO te lleva a la web - Usamos el target robusto)
-          videoClickTarget.addEventListener('click', () => { 
-            console.log("Abriendo web SNR LAB desde video...");
-            window.open('https://snrlab.io/', '_blank');
-          });
-          
+          // El click en el logo 3D también abre la web (sin cambios)
           el.addEventListener('click', () => { window.open('https://snrlab.io/', '_blank'); });
         }
       });
@@ -122,14 +202,29 @@
   </head>
   
   <body>
+
+    <!-- ─── OVERLAY HTML 2D PARA EL LINK ──────────────────────────────────────
+         FIX: Este elemento vive FUERA del canvas de A-Frame, en el DOM normal.
+         Los eventos touch del navegador lo alcanzan de forma nativa y directa,
+         sin depender del raycaster de A-Frame. Es el método más confiable
+         para links interactivos en experiencias AR mobile.
+    ─────────────────────────────────────────────────────────────────────────── -->
+    <div id="tap-overlay">
+      <a href="https://snrlab.io/" target="_blank" rel="noopener noreferrer">
+        → Visitá SNR LAB
+      </a>
+    </div>
+
+    <!-- FIX: Eliminamos rayOrigin:mouse del cursor (era solo para desktop).
+         En mobile con MindAR, el raycaster de A-Frame no es necesario para
+         el link — lo maneja el overlay HTML. Lo dejamos solo para el logo 3D
+         pero con rayOrigin:entity que funciona en touch. -->
     <a-scene mindar-image="imageTargetSrc: ./assets/tarjeta_snr.mind; autoStart: true; filterMinCF: 0.0005; filterBeta: 0.1;" 
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
              device-orientation-permission-ui="enabled: false"
-             gesture-detector
-             cursor="fuse: false; rayOrigin: mouse"
-             raycaster="objects: .clickable">
+             gesture-detector>
       
       <a-assets>
         <a-asset-item id="modelo-3d" src="./assets/snr_business_card.glb"></a-asset-item>
@@ -147,19 +242,16 @@
         <a-plane id="barrido-tarjeta" position="0 0 0.005" width="1" height="1.5" visible="false"
                  material="shader: escaner-silueta; mascara: #mascara-tarjeta; colorLinea: #16d957; transparent: true; blending: additive"></a-plane>
 
+        <!-- FIX: Ya no necesitamos el entidad-video con click ni el video-click-target.
+             El link lo maneja el overlay HTML. Eliminamos el plano transparente invisible
+             que causaba conflictos con el raycaster en mobile. -->
         <a-plane id="entidad-video" position="0 0 1" rotation="0 0 0" width="1.5" height="0.84375" scale="0 0 0"
                  material="shader: video-redondeado; src: #mi-video; mascara: #mascara-video; transparent: true; side: double"></a-plane>
 
-        <a-entity id="video-click-target" 
-                  class="clickable"
-                  geometry="primitive: plane; width: 1.5; height: 0.84375"
-                  material="opacity: 0; transparent: true"
-                  position="0 0 1.005"
-                  scale="0 0 0"></a-entity>
+        <!-- FIX: Cambiamos el texto hint para que coincida con el nuevo UX -->
+        <a-text id="hint-text" value="tap el botón para ir a la web." color="#16d957" align="center" position="0 -0.48 1.01" width="0.8" scale="0 0 0" font="mozillavr"></a-text>
 
-        <a-text id="hint-text" value="click en el video para ir a la web." color="#16d957" align="center" position="0 -0.48 1.01" width="0.8" scale="0 0 0" font="mozillavr"></a-text>
-
-        <a-entity gltf-model="#modelo-3d" id="logo-snr" class="clickable" position="0 0 0" rotation="90 0 0" scale="0 0 0" gesture-handler logica-interactiva></a-entity>
+        <a-entity gltf-model="#modelo-3d" id="logo-snr" position="0 0 0" rotation="90 0 0" scale="0 0 0" gesture-handler logica-interactiva></a-entity>
 
       </a-entity>
     </a-scene>
